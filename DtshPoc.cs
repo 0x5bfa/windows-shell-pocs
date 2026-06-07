@@ -52,9 +52,9 @@ static int RunTurnOn()
 	PrintStatus(dtsh, DtshType.FileSharing);
 
 	Console.WriteLine();
-	Console.WriteLine("Calling CDetectionAndSharing::TurnOn(hwnd: 0, type: All, value: 1)...");
-	int hr = dtsh.TurnOn(0, DtshType.All, 1);
-	PrintHr("TurnOn(All, 1)", hr);
+	Console.WriteLine("Calling CNetworkExplorerFolder::s_TurnOnDTSharing(hwnd: 0)...");
+	int hr = DtshNative.TurnOnDtSharing(0);
+	PrintHr("s_TurnOnDTSharing", hr);
 
 	Console.WriteLine();
 	Console.WriteLine("After:");
@@ -100,7 +100,7 @@ Usage:
 
 Commands:
   status   Calls GetStatus(type) for NetworkDiscovery, FileSharing, and All.
-  turn-on  Calls the dtsh TurnOn(hwnd: 0, type: All, value: 1) method used by the NetworkExplorer infobar click path.
+  turn-on  Calls the CNetworkExplorerFolder::s_TurnOnDTSharing flow from NetworkExplorer.dll.
   profile  Calls GetCurrentFwProfile and GetStatusForProfile, or queries the specified firewall profile.
 """);
 	return 0;
@@ -249,6 +249,8 @@ internal enum NetFwProfileType2
 internal static class DtshNative
 {
 	private static readonly Guid ClsidDetectionAndSharing = new("1FDA955B-61FF-11DA-978C-0008744FAAB7");
+	private static readonly Guid ClsidMultiObjectElevationFactory = new("36F0BD14-D84D-468C-B79C-9990F3FA897F");
+	private static readonly Guid NetworkExplorerElevationGuid = new("7A076CE1-4B31-452A-A4F1-0304C8738100");
 
 	public static IDetectionAndSharing CreateDetectionAndSharing()
 	{
@@ -270,6 +272,40 @@ internal static class DtshNative
 
 		return dtsh;
 	}
+
+	public static int TurnOnDtSharing(nint hwnd)
+	{
+		Guid clsid = ClsidMultiObjectElevationFactory;
+		Guid iid = typeof(IMultiObjectElevationFactory).GUID;
+		int hr = NativeMethods.CoCreateMultiObjectElevationFactory(
+			ref clsid,
+			null,
+			CLSCTX.InProcServer,
+			ref iid,
+			out IMultiObjectElevationFactory factory);
+
+		if (hr >= 0)
+		{
+			Guid elevationGuid = NetworkExplorerElevationGuid;
+			hr = factory.Initialize(hwnd, in elevationGuid);
+			if (hr >= 0)
+			{
+				Guid objectClsid = ClsidDetectionAndSharing;
+				Guid objectIid = typeof(IDetectionAndSharing).GUID;
+				hr = factory.CreateElevatedObject(in objectClsid, in objectIid, out IDetectionAndSharing dtsh);
+				if (hr >= 0)
+				{
+					hr = NativeMethods.CoAllowSetForegroundWindow(dtsh, 0);
+					if (hr >= 0)
+					{
+						hr = dtsh.TurnOn(hwnd, DtshType.All, 1);
+					}
+				}
+			}
+		}
+
+		return hr;
+	}
 }
 
 internal static partial class NativeMethods
@@ -281,6 +317,19 @@ internal static partial class NativeMethods
 		CLSCTX clsContext,
 		ref Guid riid,
 		out IDetectionAndSharing obj);
+
+	[LibraryImport("ole32.dll", EntryPoint = "CoCreateInstance")]
+	internal static partial int CoCreateMultiObjectElevationFactory(
+		ref Guid rclsid,
+		IUnknownObject? outer,
+		CLSCTX clsContext,
+		ref Guid riid,
+		out IMultiObjectElevationFactory obj);
+
+	[LibraryImport("ole32.dll")]
+	internal static partial int CoAllowSetForegroundWindow(
+		IUnknownObject server,
+		nint reserved);
 }
 
 [GeneratedComInterface]
@@ -324,6 +373,26 @@ internal partial interface IDetectionAndSharing : IUnknownObject
 		NetFwProfileType2 profile,
 		DtshType type,
 		int value);
+}
+
+[GeneratedComInterface]
+[Guid("6FABDA16-031E-47E3-B2A2-2339C05CCB9E")]
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal partial interface IMultiObjectElevationFactory : IUnknownObject
+{
+	[PreserveSig]
+	int Initialize(
+		nint hwnd,
+		in Guid context);
+
+	[PreserveSig]
+	int Unknown_20();
+
+	[PreserveSig]
+	int CreateElevatedObject(
+		in Guid clsid,
+		in Guid iid,
+		out IDetectionAndSharing obj);
 }
 
 [Flags]

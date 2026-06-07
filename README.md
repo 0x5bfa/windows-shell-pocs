@@ -24,6 +24,7 @@ dotnet run --file EnumerateJumpListPoc.cs -- [file]
 dotnet run --file RegisterFolderChangeNotificationPoc.cs -- [folder]
 dotnet run --file PinFolderToQuickAccessPoc.cs -- [folder]
 dotnet run --file SetVolumeLabelPoc.cs -- [label]
+dotnet run --file DtshPoc.cs -- turn-on
 ```
 
 Sync-root sample:
