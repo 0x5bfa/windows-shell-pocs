@@ -1,8 +1,0 @@
-{
-  "profiles": {
-    "ShellBrowserApp": {
-      "commandName": "Project",
-      "nativeDebugging": true
-    }
-  }
-}
