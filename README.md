@@ -25,6 +25,7 @@ dotnet run --file RegisterFolderChangeNotificationPoc.cs -- [folder]
 dotnet run --file PinFolderToQuickAccessPoc.cs -- [folder]
 dotnet run --file SetVolumeLabelPoc.cs -- [label]
 dotnet run --file DtshPoc.cs -- turn-on
+dotnet run --file DtshPoc.cs -- open-net-center
 ```
 
 Sync-root sample:

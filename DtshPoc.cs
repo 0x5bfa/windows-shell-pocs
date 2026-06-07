@@ -21,6 +21,7 @@ try
 	{
 		"status" => RunStatus(),
 		"turn-on" => RunTurnOn(),
+		"open-net-center" => RunOpenNetCenter(),
 		"profile" => RunProfile(args),
 		"help" or "-h" or "--help" => RunHelp(),
 		_ => RunUnknownCommand(command),
@@ -64,6 +65,14 @@ static int RunTurnOn()
 	return hr < 0 ? 1 : 0;
 }
 
+static int RunOpenNetCenter()
+{
+	Console.WriteLine("Calling CNetworkExplorerFolderViewCB::s_OnOpenNetCenter()...");
+	int hr = DtshNative.OpenNetCenter();
+	PrintHr("s_OnOpenNetCenter", hr);
+	return hr < 0 ? 1 : 0;
+}
+
 static int RunProfile(string[] args)
 {
 	IDetectionAndSharing dtsh = DtshNative.CreateDetectionAndSharing();
@@ -96,11 +105,14 @@ static int RunHelp()
 Usage:
   dotnet run --file DtshPoc.cs -- [status]
   dotnet run --file DtshPoc.cs -- turn-on
+  dotnet run --file DtshPoc.cs -- open-net-center
   dotnet run --file DtshPoc.cs -- profile [Domain|Private|Public|All]
 
 Commands:
   status   Calls GetStatus(type) for NetworkDiscovery, FileSharing, and All.
   turn-on  Calls the CNetworkExplorerFolder::s_TurnOnDTSharing flow from NetworkExplorer.dll.
+  open-net-center
+           Calls the CNetworkExplorerFolderViewCB::s_OnOpenNetCenter flow from NetworkExplorer.dll.
   profile  Calls GetCurrentFwProfile and GetStatusForProfile, or queries the specified firewall profile.
 """);
 	return 0;
@@ -250,6 +262,7 @@ internal static class DtshNative
 {
 	private static readonly Guid ClsidDetectionAndSharing = new("1FDA955B-61FF-11DA-978C-0008744FAAB7");
 	private static readonly Guid ClsidMultiObjectElevationFactory = new("36F0BD14-D84D-468C-B79C-9990F3FA897F");
+	private static readonly Guid ClsidOpenControlPanel = new("06622D85-6856-4460-8DE1-A81921B41C4B");
 	private static readonly Guid NetworkExplorerElevationGuid = new("7A076CE1-4B31-452A-A4F1-0304C8738100");
 
 	public static IDetectionAndSharing CreateDetectionAndSharing()
@@ -306,6 +319,29 @@ internal static class DtshNative
 
 		return hr;
 	}
+
+	public static int OpenNetCenter()
+	{
+		Guid clsid = ClsidOpenControlPanel;
+		Guid iid = typeof(IOpenControlPanel).GUID;
+		int hr = NativeMethods.CoCreateOpenControlPanel(
+			ref clsid,
+			null,
+			CLSCTX.InProcServer,
+			ref iid,
+			out IOpenControlPanel controlPanel);
+
+		if (hr >= 0)
+		{
+			hr = controlPanel.Open("Microsoft.NetworkAndSharingCenter", "Advanced", null);
+			if (hr >= 0)
+			{
+				hr = 0;
+			}
+		}
+
+		return hr;
+	}
 }
 
 internal static partial class NativeMethods
@@ -325,6 +361,14 @@ internal static partial class NativeMethods
 		CLSCTX clsContext,
 		ref Guid riid,
 		out IMultiObjectElevationFactory obj);
+
+	[LibraryImport("ole32.dll", EntryPoint = "CoCreateInstance")]
+	internal static partial int CoCreateOpenControlPanel(
+		ref Guid rclsid,
+		IUnknownObject? outer,
+		CLSCTX clsContext,
+		ref Guid riid,
+		out IOpenControlPanel obj);
 
 	[LibraryImport("ole32.dll")]
 	internal static partial int CoAllowSetForegroundWindow(
@@ -393,6 +437,24 @@ internal partial interface IMultiObjectElevationFactory : IUnknownObject
 		in Guid clsid,
 		in Guid iid,
 		out IDetectionAndSharing obj);
+}
+
+[GeneratedComInterface(StringMarshalling = StringMarshalling.Utf16)]
+[Guid("D11AD862-66DE-4DF4-BF6C-1F5621996AF1")]
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal partial interface IOpenControlPanel : IUnknownObject
+{
+	[PreserveSig]
+	int Open(
+		string? name,
+		string? page,
+		IUnknownObject? site);
+
+	[PreserveSig]
+	int GetPath(
+		string name,
+		nint path,
+		uint pathLength);
 }
 
 [Flags]
