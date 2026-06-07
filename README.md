@@ -11,7 +11,8 @@ dotnet run --file EnumerateFolderPoc.cs -- C:\
 dotnet run --file EnumerateDetailsViewColumnsPoc.cs -- C:\
 dotnet run --file EnumerateSearchFolderPoc.cs
 dotnet run --file GetFolderViewPoc.cs -- C:\
-dotnet run --file ParseShellUrlPoc.cs
+dotnet run --file ShellUrlPoc.cs -- "shell:Downloads"
+dotnet run --file DtshPoc.cs -- status
 dotnet run --file EnumerateOpenWithMenuItemsPoc.cs -- README.md
 ```
 
@@ -30,3 +31,9 @@ Sync-root sample:
 ```powershell
 dotnet run --file SyncRootPoc.cs -- --help
 ```
+
+Notes:
+
+- `DtshPoc.cs` targets the internal `CLSID_DetectionAndSharing` / `IDetectionAndSharing` object from `dtsh.dll`. `turn-on` may require an elevated console.
+- `ShellUrlPoc.cs` targets the internal `CLSID_ShellUrl` / `IShellUrl` object from `ExplorerFrame.dll`.
+- These internal interfaces are inferred from Windows call sites, so treat them as undocumented and version-sensitive.
