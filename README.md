@@ -34,26 +34,6 @@ Sync-root sample:
 dotnet run --file SyncRootPoc.cs -- --help
 ```
 
-WinUI POC:
-
-```powershell
-.\win-dev-skills\plugins\winui\skills\winui-dev-workflow\BuildAndRun.ps1 .\DtshPocWinUI\DtshPocWinUI.csproj -SkipRun
-```
-
-Agent WinUI plugin setup:
-
-```powershell
-if (-not (Test-Path .\win-dev-skills)) {
-    git clone https://github.com/microsoft/win-dev-skills.git win-dev-skills
-}
-
-codex plugin marketplace add .\win-dev-skills
-codex plugin add winui@win-dev-skills
-codex plugin list
-```
-
-`win-dev-skills/` is a local clone for agent tooling and is intentionally ignored.
-
 Notes:
 
 - `DtshPoc.cs` targets the internal `CLSID_DetectionAndSharing` / `IDetectionAndSharing` object from `dtsh.dll`. `turn-on` may require an elevated console.

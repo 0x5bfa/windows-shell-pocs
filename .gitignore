@@ -398,6 +398,3 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
-
-# Local clone used only to install the WinUI Codex plugin.
-win-dev-skills/
