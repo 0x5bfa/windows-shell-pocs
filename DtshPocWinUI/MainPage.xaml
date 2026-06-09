@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="DtshPocWinUI.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:DtshPocWinUI"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:viewModels="using:DtshPocWinUI.ViewModels"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <DataTemplate x:Key="StatusRowTemplate" x:DataType="viewModels:DtshStatusRow">
+            <Grid Padding="12" ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="180" />
+                    <ColumnDefinition Width="220" />
+                    <ColumnDefinition Width="100" />
+                    <ColumnDefinition Width="100" />
+                </Grid.ColumnDefinitions>
+                <TextBlock
+                    Grid.Column="0"
+                    Text="{x:Bind Type}"
+                    Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <TextBlock
+                    Grid.Column="1"
+                    Text="{x:Bind HResult}"
+                    TextWrapping="Wrap" />
+                <TextBlock Grid.Column="2" Text="{x:Bind State}" />
+                <TextBlock Grid.Column="3" Text="{x:Bind Action}" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="LogRowTemplate" x:DataType="viewModels:DtshLogEntry">
+            <Grid Padding="12,8" ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="72" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock
+                    Grid.Column="0"
+                    Text="{x:Bind Timestamp}"
+                    Style="{StaticResource CaptionTextBlockStyle}" />
+                <TextBlock
+                    Grid.Column="1"
+                    Text="{x:Bind Message}"
+                    TextWrapping="Wrap" />
+            </Grid>
+        </DataTemplate>
+    </Page.Resources>
+
+    <Grid Padding="24" RowSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" ColumnSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Spacing="4">
+                <TextBlock
+                    Text="DTSH WinUI POC"
+                    Style="{StaticResource TitleTextBlockStyle}" />
+                <TextBlock
+                    Text="{x:Bind ViewModel.WindowHandleText, Mode=OneWay}"
+                    Style="{StaticResource CaptionTextBlockStyle}" />
+            </StackPanel>
+            <ToggleSwitch
+                Grid.Column="1"
+                AutomationProperties.AutomationId="InitializeHwndModeToggle"
+                Header="Initialize with app HWND"
+                OffContent="0"
+                OnContent="App HWND"
+                IsOn="{x:Bind ViewModel.UseWindowHandleForInitialize, Mode=TwoWay}" />
+        </Grid>
+
+        <CommandBar
+            Grid.Row="1"
+            Background="Transparent"
+            DefaultLabelPosition="Right">
+            <AppBarButton
+                AutomationProperties.AutomationId="RefreshStatusButton"
+                Label="Refresh status"
+                Command="{x:Bind ViewModel.RefreshStatusCommand}"
+                IsEnabled="{x:Bind local:MainPage.IsNotBusy(ViewModel.IsBusy), Mode=OneWay}">
+                <AppBarButton.Icon>
+                    <SymbolIcon Symbol="Refresh" />
+                </AppBarButton.Icon>
+            </AppBarButton>
+            <AppBarButton
+                AutomationProperties.AutomationId="InitializeFactoryButton"
+                Label="Initialize"
+                Command="{x:Bind ViewModel.InitializeFactoryCommand}"
+                IsEnabled="{x:Bind local:MainPage.IsNotBusy(ViewModel.IsBusy), Mode=OneWay}">
+                <AppBarButton.Icon>
+                    <SymbolIcon Symbol="Setting" />
+                </AppBarButton.Icon>
+            </AppBarButton>
+            <AppBarButton
+                AutomationProperties.AutomationId="CreateElevatedObjectButton"
+                Label="Create elevated object"
+                Command="{x:Bind ViewModel.CreateElevatedObjectCommand}"
+                IsEnabled="{x:Bind local:MainPage.IsNotBusy(ViewModel.IsBusy), Mode=OneWay}">
+                <AppBarButton.Icon>
+                    <SymbolIcon Symbol="Add" />
+                </AppBarButton.Icon>
+            </AppBarButton>
+            <AppBarButton
+                AutomationProperties.AutomationId="TurnOnButton"
+                Label="Turn on"
+                Command="{x:Bind ViewModel.TurnOnCommand}"
+                IsEnabled="{x:Bind local:MainPage.IsNotBusy(ViewModel.IsBusy), Mode=OneWay}">
+                <AppBarButton.Icon>
+                    <SymbolIcon Symbol="Play" />
+                </AppBarButton.Icon>
+            </AppBarButton>
+            <AppBarButton
+                AutomationProperties.AutomationId="OpenSettingsButton"
+                Label="Open settings"
+                Command="{x:Bind ViewModel.OpenSettingsCommand}"
+                IsEnabled="{x:Bind local:MainPage.IsNotBusy(ViewModel.IsBusy), Mode=OneWay}">
+                <AppBarButton.Icon>
+                    <SymbolIcon Symbol="OpenFile" />
+                </AppBarButton.Icon>
+            </AppBarButton>
+        </CommandBar>
+
+        <TextBlock
+            Grid.Row="2"
+            Text="{x:Bind ViewModel.InitializeHandleText, Mode=OneWay}"
+            Style="{StaticResource CaptionTextBlockStyle}" />
+
+        <InfoBar
+            Grid.Row="3"
+            IsOpen="{x:Bind ViewModel.IsInfoBarOpen, Mode=TwoWay}"
+            Severity="{x:Bind ViewModel.LastSeverity, Mode=OneWay}"
+            Title="{x:Bind ViewModel.LastTitle, Mode=OneWay}"
+            Message="{x:Bind ViewModel.LastMessage, Mode=OneWay}" />
+
+        <Grid Grid.Row="4" ColumnSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="1.2*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4">
+                <TextBlock Text="Status" Style="{StaticResource SubtitleTextBlockStyle}" />
+                <TextBlock
+                    Text="{x:Bind ViewModel.CurrentProfileText, Mode=OneWay}"
+                    Style="{StaticResource CaptionTextBlockStyle}" />
+            </StackPanel>
+            <TextBlock
+                Grid.Row="0"
+                Grid.Column="1"
+                Text="Log"
+                Style="{StaticResource SubtitleTextBlockStyle}" />
+
+            <ListView
+                Grid.Row="1"
+                Grid.Column="0"
+                AutomationProperties.AutomationId="StatusList"
+                ItemsSource="{x:Bind ViewModel.StatusRows, Mode=OneWay}"
+                ItemTemplate="{StaticResource StatusRowTemplate}">
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    </Style>
+                </ListView.ItemContainerStyle>
+            </ListView>
+
+            <ListView
+                Grid.Row="1"
+                Grid.Column="1"
+                AutomationProperties.AutomationId="LogList"
+                ItemsSource="{x:Bind ViewModel.LogEntries, Mode=OneWay}"
+                ItemTemplate="{StaticResource LogRowTemplate}">
+                <ListView.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <ItemsStackPanel ItemsUpdatingScrollMode="KeepLastItemInView" />
+                    </ItemsPanelTemplate>
+                </ListView.ItemsPanel>
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    </Style>
+                </ListView.ItemContainerStyle>
+            </ListView>
+        </Grid>
+    </Grid>
+</Page>

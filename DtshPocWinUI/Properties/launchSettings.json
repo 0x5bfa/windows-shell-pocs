@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "DtshPocWinUI (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "DtshPocWinUI (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
