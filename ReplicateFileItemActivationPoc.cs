@@ -1,21 +1,26 @@
 #:sdk Microsoft.NET.Sdk
+#:package Microsoft.Windows.CsWin32@0.3.298
 #:property TargetFramework=net10.0-windows
 #:property ImplicitUsings=enable
 #:property Nullable=enable
 #:property AllowUnsafeBlocks=true
-#:property DisableRuntimeMarshalling=true
-#:property PublishAot=true
+#:property PublishAot=false
 #:property InvariantGlobalization=true
+#:property CsWin32RunAsBuildTask=true
+#:property DisableRuntimeMarshalling=true
 
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.Marshalling;
-using Microsoft.Win32.SafeHandles;
+using Windows.Win32;
+using Windows.Win32.Foundation;
+using Windows.Win32.System.Com;
+using Windows.Win32.UI.Shell;
+using Windows.Win32.UI.Shell.Common;
 
 return ReplicateFileItemActivationPoc.Run(args);
 
 internal static class ReplicateFileItemActivationPoc
 {
-	public static int Run(string[] args)
+	public unsafe static int Run(string[] args)
 	{
 		if (args is ["--help"] or ["-h"] or ["/?"] || args.Length is < 1 or > 2)
 		{
@@ -37,29 +42,37 @@ internal static class ReplicateFileItemActivationPoc
 			return 2;
 		}
 
-		ComRuntime.Initialize();
+		int hr = PInvoke.CoInitializeEx(null, COINIT.COINIT_APARTMENTTHREADED);
+		bool shouldUninitialize = hr == HRESULT.S_OK || hr == HRESULT.S_FALSE;
+
+		if (hr != HRESULT.RPC_E_CHANGED_MODE)
+		{
+			// Throw an exception
+		}
+
 		try
 		{
 			return FileItemActivation.Execute(path, dryRun);
 		}
 		finally
 		{
-			ComRuntime.Uninitialize();
+			if (shouldUninitialize)
+			{
+				PInvoke.CoUninitialize();
+			}
 		}
 	}
 }
 
-internal static class FileItemActivation
+internal static unsafe class FileItemActivation
 {
 	public static int Execute(string path, bool dryRun)
 	{
-		using SafePidlHandle absolutePidl = ShellNative.ParseDisplayName(path);
-		Guid shellFolderIid = typeof(IShellFolder).GUID;
-		HResult.ThrowIfFailed(ShellNative.SHBindToParent(
-			absolutePidl.DangerousGetHandle(),
-			ref shellFolderIid,
-			out IShellFolder parentFolder,
-			out nint childPidl));
+		PInvoke.SHParseDisplayName(path, null, out ITEMIDLIST* pidl, 0, out _);
+		PInvoke.SHBindToParent(*pidl, typeof(IShellFolder).GUID, out var parentFolderObj, out ITEMIDLIST* childPidlPointer);
+
+		nint childPidl = (nint)childPidlPointer;
+		var parentFolder = (IShellFolder)parentFolderObj;
 
 		try
 		{
@@ -67,37 +80,33 @@ internal static class FileItemActivation
 			Marshal.WriteIntPtr(childPidlArray, childPidl);
 			try
 			{
-			Guid contextMenuIid = typeof(IContextMenu).GUID;
-			HResult.ThrowIfFailed(parentFolder.GetUIObjectOf(
-				0,
-				1,
-				childPidlArray,
-				ref contextMenuIid,
-				0,
-				out IContextMenu contextMenu));
+				parentFolder.GetUIObjectOf(HWND.Null, 1, (ITEMIDLIST**)childPidlArray, typeof(IContextMenu).GUID, out var contextMenuObj);
+				var contextMenu = (IContextMenu)contextMenuObj;
+	
+				var menu = PInvoke.CreatePopupMenu();
+				contextMenu.QueryContextMenu(menu, 0, 1, 0x7FFF, 0);
 
-			using SafeMenuHandle menu = SafeMenuHandle.Create();
-			HResult.ThrowIfFailed(contextMenu.QueryContextMenu(
-				menu.DangerousGetHandle(),
-				0,
-				1,
-				0x7FFF,
-				0));
+				Console.WriteLine("Explorer-style file activation");
+				Console.WriteLine($"Path: {path}");
+				Console.WriteLine("Pipeline: IShellItem/PIDL -> parent IShellFolder -> IContextMenu -> open");
 
-			Console.WriteLine("Explorer-style file activation");
-			Console.WriteLine($"Path: {path}");
-			Console.WriteLine("Pipeline: IShellItem/PIDL -> parent IShellFolder -> IContextMenu -> open");
+				if (dryRun)
+				{
+					Console.WriteLine("Dry run: context menu was created; Open was not invoked.");
+					return 0;
+				}
 
-			if (dryRun)
-			{
-				Console.WriteLine("Dry run: context menu was created; Open was not invoked.");
+				var verb = Marshal.StringToCoTaskMemAnsi("open");
+				var verbW = Marshal.StringToCoTaskMemUni("open");
+				CMINVOKECOMMANDINFO value = default;
+				value.cbSize = (uint)sizeof(CMINVOKECOMMANDINFO);
+				value.fMask = 0x00004000; // CMIC_MASK_UNICODE
+				value.lpVerb = (PCSTR)(byte*)verb;
+				value.nShow = 1;
+
+				contextMenu.InvokeCommand(value);
+				Console.WriteLine("IContextMenu::InvokeCommand(open) succeeded.");
 				return 0;
-			}
-
-			using CommandInfo command = CommandInfo.Open();
-			HResult.ThrowIfFailed(contextMenu.InvokeCommand(command.DangerousGetHandle()));
-			Console.WriteLine("IContextMenu::InvokeCommand(open) succeeded.");
-			return 0;
 			}
 			finally
 			{
@@ -108,257 +117,8 @@ internal static class FileItemActivation
 		{
 			if (childPidl != 0)
 			{
-				ShellNative.ILFree(childPidl);
+				PInvoke.ILFree((ITEMIDLIST*)childPidl);
 			}
 		}
 	}
-}
-
-internal static partial class ShellNative
-{
-	[LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)]
-	internal static partial int SHParseDisplayName(
-		string name,
-		IUnknownObject? bindContext,
-		out nint pidl,
-		uint attributesIn,
-		out uint attributesOut);
-
-	[LibraryImport("shell32.dll")]
-	internal static partial int SHBindToParent(
-		nint pidl,
-		ref Guid riid,
-		out IShellFolder parent,
-		out nint child);
-
-	[LibraryImport("shell32.dll")]
-	internal static partial void ILFree(nint pidl);
-
-	public static SafePidlHandle ParseDisplayName(string path)
-	{
-		HResult.ThrowIfFailed(SHParseDisplayName(path, null, out nint pidl, 0, out _));
-		return SafePidlHandle.Attach(pidl);
-	}
-}
-
-internal static class ComRuntime
-{
-	private static bool shouldUninitialize;
-
-	public static void Initialize()
-	{
-		int hr = NativeMethods.CoInitializeEx(0, COINIT.ApartmentThreaded);
-		shouldUninitialize = hr is HResult.S_OK or HResult.S_FALSE;
-		if (hr != HResult.RPC_E_CHANGED_MODE)
-		{
-			HResult.ThrowIfFailed(hr);
-		}
-	}
-
-	public static void Uninitialize()
-	{
-		if (shouldUninitialize)
-		{
-			NativeMethods.CoUninitialize();
-		}
-	}
-}
-
-internal static partial class NativeMethods
-{
-	[LibraryImport("ole32.dll")]
-	internal static partial int CoInitializeEx(nint pvReserved, COINIT coInit);
-
-	[LibraryImport("ole32.dll")]
-	internal static partial void CoUninitialize();
-
-	[LibraryImport("user32.dll")]
-	internal static partial nint CreatePopupMenu();
-
-	[LibraryImport("user32.dll")]
-	[return: MarshalAs(UnmanagedType.Bool)]
-	internal static partial bool DestroyMenu(nint menu);
-}
-
-[GeneratedComInterface]
-[Guid("00000000-0000-0000-C000-000000000046")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal partial interface IUnknownObject
-{
-}
-
-[GeneratedComInterface(StringMarshalling = StringMarshalling.Utf16)]
-[Guid("000214E6-0000-0000-C000-000000000046")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal partial interface IShellFolder : IUnknownObject
-{
-	[PreserveSig]
-	int ParseDisplayName(nint hwnd, IUnknownObject? bindContext, string displayName, out uint eaten, out nint pidl, out uint attributes);
-
-	[PreserveSig]
-	int EnumObjects(nint hwnd, uint flags, out IUnknownObject enumerator);
-
-	[PreserveSig]
-	int BindToObject(nint pidl, IUnknownObject? bindContext, in Guid riid, out IUnknownObject obj);
-
-	[PreserveSig]
-	int BindToStorage(nint pidl, IUnknownObject? bindContext, in Guid riid, out IUnknownObject obj);
-
-	[PreserveSig]
-	int CompareIDs(nint lParam, nint pidl1, nint pidl2);
-
-	[PreserveSig]
-	int CreateViewObject(nint hwnd, in Guid riid, out IUnknownObject obj);
-
-	[PreserveSig]
-	int GetAttributesOf(uint count, nint childPidls, ref uint attributes);
-
-	[PreserveSig]
-	int GetUIObjectOf(nint hwnd, uint count, nint childPidls, ref Guid riid, nint reserved, out IContextMenu obj);
-
-	[PreserveSig]
-	int GetDisplayNameOf(nint pidl, uint flags, out nint name);
-
-	[PreserveSig]
-	int SetNameOf(nint hwnd, nint pidl, string name, uint flags, out nint newPidl);
-}
-
-[GeneratedComInterface]
-[Guid("000214E4-0000-0000-C000-000000000046")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal partial interface IContextMenu : IUnknownObject
-{
-	[PreserveSig]
-	int QueryContextMenu(nint menu, uint indexMenu, uint idCmdFirst, uint idCmdLast, uint flags);
-
-	[PreserveSig]
-	int InvokeCommand(nint commandInfo);
-
-	[PreserveSig]
-	int GetCommandString(nuint idCommand, uint type, nint reserved, nint name, uint nameChars);
-}
-
-[StructLayout(LayoutKind.Sequential)]
-internal struct CMINVOKECOMMANDINFOEX
-{
-	public uint cbSize;
-	public uint fMask;
-	public nint hwnd;
-	public nint lpVerb;
-	public nint lpParameters;
-	public nint lpDirectory;
-	public int nShow;
-	public uint dwHotKey;
-	public nint hIcon;
-	public nint lpTitle;
-	public nint lpVerbW;
-	public nint lpParametersW;
-	public nint lpDirectoryW;
-	public nint lpTitleW;
-	public POINT ptInvoke;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-internal struct POINT
-{
-	public int x;
-	public int y;
-}
-
-internal sealed class CommandInfo : SafeHandleZeroOrMinusOneIsInvalid
-{
-	private nint verb;
-	private nint verbW;
-
-	private CommandInfo()
-		: base(true)
-	{
-	}
-
-	public static CommandInfo Open()
-	{
-		var result = new CommandInfo();
-		result.verb = Marshal.StringToCoTaskMemAnsi("open");
-		result.verbW = Marshal.StringToCoTaskMemUni("open");
-		var value = new CMINVOKECOMMANDINFOEX
-		{
-			cbSize = (uint)Marshal.SizeOf<CMINVOKECOMMANDINFOEX>(),
-			fMask = 0x00004000, // CMIC_MASK_UNICODE
-			lpVerb = result.verb,
-			lpVerbW = result.verbW,
-			nShow = 1,
-		};
-		result.SetHandle(Marshal.AllocHGlobal(Marshal.SizeOf(value)));
-		Marshal.StructureToPtr(value, result.handle, false);
-		return result;
-	}
-
-	protected override bool ReleaseHandle()
-	{
-		Marshal.DestroyStructure<CMINVOKECOMMANDINFOEX>(handle);
-		Marshal.FreeHGlobal(handle);
-		Marshal.FreeCoTaskMem(verb);
-		Marshal.FreeCoTaskMem(verbW);
-		return true;
-	}
-}
-
-internal sealed class SafeMenuHandle : SafeHandleZeroOrMinusOneIsInvalid
-{
-	private SafeMenuHandle()
-		: base(true)
-	{
-	}
-
-	public static SafeMenuHandle Create()
-	{
-		var result = new SafeMenuHandle();
-		result.SetHandle(NativeMethods.CreatePopupMenu());
-		return result;
-	}
-
-	protected override bool ReleaseHandle()
-		=> NativeMethods.DestroyMenu(handle);
-}
-
-internal sealed class SafePidlHandle : SafeHandleZeroOrMinusOneIsInvalid
-{
-	private SafePidlHandle()
-		: base(true)
-	{
-	}
-
-	public static SafePidlHandle Attach(nint value)
-	{
-		var result = new SafePidlHandle();
-		result.SetHandle(value);
-		return result;
-	}
-
-	protected override bool ReleaseHandle()
-	{
-		ShellNative.ILFree(handle);
-		return true;
-	}
-}
-
-internal static class HResult
-{
-	public const int S_OK = 0;
-	public const int S_FALSE = 1;
-	public const int RPC_E_CHANGED_MODE = unchecked((int)0x80010106);
-
-	public static void ThrowIfFailed(int hr)
-	{
-		if (hr < 0)
-		{
-			Marshal.ThrowExceptionForHR(hr);
-		}
-	}
-}
-
-[Flags]
-internal enum COINIT : uint
-{
-	ApartmentThreaded = 0x2,
 }

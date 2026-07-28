@@ -1,1 +1,12 @@
 CoInitializeEx
+CoUninitialize
+SHParseDisplayName
+SHBindToParent
+ILFree
+CreatePopupMenu
+DestroyMenu
+IShellFolder
+IContextMenu
+S_OK
+S_FALSE
+RPC_E_CHANGED_MODE
