@@ -1,6 +1,7 @@
 {
 	"$schema": "https://aka.ms/CsWin32.schema.json",
 	"allowMarshaling": true,
+	"useSafeHandles": false,
 	"comInterop": {
 		"useComSourceGenerators": true,
 		"preserveSigMethods": [
