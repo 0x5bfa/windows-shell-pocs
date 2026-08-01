@@ -64,47 +64,29 @@ return rootCommand.Parse(args).Invoke();
 [STAThread]
 static unsafe void ActivateFileItem(string path)
 {
-	HRESULT initializeResult = PInvoke.CoInitializeEx(
-		null,
-		COINIT.COINIT_APARTMENTTHREADED);
-	bool uninitialize = initializeResult == HRESULT.S_OK ||
-		initializeResult == HRESULT.S_FALSE;
+	HRESULT initializeResult = PInvoke.CoInitializeEx(null, COINIT.COINIT_APARTMENTTHREADED);
+	bool uninitialize = initializeResult == HRESULT.S_OK || initializeResult == HRESULT.S_FALSE;
 
 	// initializeResult.ThrowOnFailure();
 
 	try
 	{
-		PInvoke.SHCreateItemFromParsingName(
-			path,
-			null,
-			out IShellItem shellItem).ThrowOnFailure();
+		PInvoke.SHCreateItemFromParsingName(path, null, out IShellItem shellItem).ThrowOnFailure();
 
-		PInvoke.SHCreateShellItemArrayFromShellItem(
-			shellItem,
-			out IShellItemArray selection).ThrowOnFailure();
+		PInvoke.SHCreateShellItemArrayFromShellItem(shellItem, out IShellItemArray selection).ThrowOnFailure();
 
-		Guid selectionIid = typeof(IShellItemArray).GUID;
-		global::Windows.Win32.PInvoke.CoMarshalInterThreadInterfaceInStream(
-			selectionIid,
-			selection,
-			out global::Windows.Win32.System.Com.IStream selectionStream).ThrowOnFailure();
+		PInvoke.CoMarshalInterThreadInterfaceInStream(typeof(IShellItemArray).GUID, selection, out IStream selectionStream).ThrowOnFailure();
 
 		HWND ownerWindow = PInvoke.GetForegroundWindow();
 		uint messagePosition = PInvoke.GetMessagePos();
 		Exception? workerException = null;
-		using EventWaitHandle completion = new(
-			false,
-			EventResetMode.ManualReset);
+		using EventWaitHandle completion = new(false, EventResetMode.ManualReset);
 
 		Thread worker = new(() =>
 		{
 			try
 			{
-				InvokeSelectionOnBackgroundThread(
-					selectionStream,
-					path,
-					ownerWindow,
-					messagePosition);
+				InvokeSelectionOnBackgroundThread(selectionStream, path, ownerWindow, messagePosition);
 			}
 			catch (Exception exception)
 			{
@@ -127,7 +109,7 @@ static unsafe void ActivateFileItem(string path)
 			COWAIT_FLAGS.COWAIT_DISPATCH_CALLS |
 			COWAIT_FLAGS.COWAIT_DISPATCH_WINDOW_MESSAGES;
 
-		global::Windows.Win32.PInvoke.CoWaitForMultipleHandles(
+		PInvoke.CoWaitForMultipleHandles(
 			(uint)waitFlags,
 			PInvoke.INFINITE,
 			completionHandle,
@@ -152,37 +134,20 @@ static unsafe void ActivateFileItem(string path)
 	}
 }
 
-static unsafe void InvokeSelectionOnBackgroundThread(
-	global::Windows.Win32.System.Com.IStream selectionStream,
-	string path,
-	HWND ownerWindow,
-	uint messagePosition)
+static unsafe void InvokeSelectionOnBackgroundThread(IStream selectionStream, string path, HWND ownerWindow, uint messagePosition)
 {
-	HRESULT initializeResult = PInvoke.CoInitializeEx(
-		null,
-		COINIT.COINIT_APARTMENTTHREADED);
-	bool uninitialize = initializeResult == HRESULT.S_OK ||
-		initializeResult == HRESULT.S_FALSE;
+	HRESULT initializeResult = PInvoke.CoInitializeEx(null, COINIT.COINIT_APARTMENTTHREADED);
+	bool uninitialize = initializeResult == HRESULT.S_OK || initializeResult == HRESULT.S_FALSE;
 
 	// initializeResult.ThrowOnFailure();
 
 	try
 	{
-		global::Windows.Win32.PInvoke
-			.CoGetInterfaceAndReleaseStream<IShellItemArray>(
-				selectionStream,
-				out IShellItemArray selection).ThrowOnFailure();
+		PInvoke.CoGetInterfaceAndReleaseStream<IShellItemArray>(selectionStream, out var selection).ThrowOnFailure();
 
-		selection.BindToHandler<IContextMenu>(
-			null,
-			PInvoke.BHID_SFUIObject,
-			out IContextMenu contextMenu).ThrowOnFailure();
+		selection.BindToHandler<IContextMenu>(null, PInvoke.BHID_SFUIObject, out var contextMenu).ThrowOnFailure();
 
-		InvokeDefaultContextMenuCommand(
-			contextMenu,
-			path,
-			ownerWindow,
-			messagePosition);
+		InvokeDefaultContextMenuCommand(contextMenu, path, ownerWindow, messagePosition);
 	}
 	finally
 	{
@@ -193,33 +158,18 @@ static unsafe void InvokeSelectionOnBackgroundThread(
 	}
 }
 
-static unsafe void InvokeDefaultContextMenuCommand(
-	IContextMenu contextMenu,
-	string path,
-	HWND ownerWindow,
-	uint messagePosition)
+static unsafe void InvokeDefaultContextMenuCommand(IContextMenu contextMenu, string path, HWND ownerWindow, uint messagePosition)
 {
 	HMENU menu = PInvoke.CreatePopupMenu();
-	if (menu.IsNull)
-	{
-		Marshal.ThrowExceptionForHR(
-			Marshal.GetHRForLastWin32Error());
-	}
+	if (menu.IsNull) Marshal.ThrowExceptionForHR(Marshal.GetHRForLastWin32Error());
 
 	try
 	{
-		contextMenu.QueryContextMenu(
-			menu,
-			0,
-			DefaultCommandIdFirst,
-			DefaultCommandIdLast,
-			ExplorerDefaultQueryFlags).ThrowOnFailure();
+		contextMenu.QueryContextMenu(menu, 0, DefaultCommandIdFirst, DefaultCommandIdLast, ExplorerDefaultQueryFlags).ThrowOnFailure();
 
 		uint commandId = PInvoke.GetMenuDefaultItem(menu, 0, 0);
 		if (commandId == NoDefaultCommand)
-		{
 			Marshal.ThrowExceptionForHR(unchecked((int)0x80004005));
-		}
 
 		Console.WriteLine($"Path: {path}");
 		Console.WriteLine($"Default command ID: {commandId}");
